@@ -16,7 +16,7 @@ import (
 	"sync/atomic"
 
 	"github.com/rusq/dlog"
-	"github.com/rusq/slackdump/v2/fsadapter"
+	"github.com/rusq/fsadapter"
 )
 
 const (
@@ -41,7 +41,7 @@ func DownloadToPath(ctx context.Context, zipOrDir string, subdir string, urls []
 		return nil
 	}
 	defer m.Close()
-	return m.Download(ctx, "", urls)
+	return m.Download(ctx, subdir, urls)
 }
 
 // Manager is the download manager.
@@ -55,15 +55,11 @@ type Manager struct {
 	// error.  If false, it will ignore the error and continue.
 	ignoreHTTPerr bool
 
-	// fsa is the base file system adapter, it points to a filesystem which
+	// fsc is the base file system adapter, it points to a filesystem which
 	// we are free to create files or directories in.
-	fsa fsadapter.FS
-	// ownFS is true, when we own the fs adapter, as opposed to when it was
-	// initialised with pre-existing fs adapter (with New).  ownFS indicates
-	// that we must close our fsa in the end.
-	ownFS bool
-	// closed indicates, that the close was called on fs adapter.
-	closed atomic.Bool
+	fsc fsadapter.FSCloser
+	// isClosed indicates, that the close was called on fs adapter.
+	isClosed atomic.Bool
 }
 
 // Option is the download manager option.
@@ -91,12 +87,15 @@ type fetchFunc func(ctx context.Context, fsa fsadapter.FS, dir string, name stri
 
 // New creates a new download Manager.
 func New(fsa fsadapter.FS, opts ...Option) *Manager {
+	return newMgr(&nopcloser{fsa}, opts...)
+}
+
+func newMgr(fsc fsadapter.FSCloser, opts ...Option) *Manager {
 	m := &Manager{
 		numWorkers:    defNumWorkers,
 		fetchFn:       get,
-		fsa:           fsa,
+		fsc:           fsc,
 		ignoreHTTPerr: true,
-		ownFS:         false,
 	}
 	for _, opt := range opts {
 		opt(m)
@@ -104,28 +103,40 @@ func New(fsa fsadapter.FS, opts ...Option) *Manager {
 	return m
 }
 
+// nopcloser is a wrapper around fsadapter.FS which implements the
+// fsadapter.FSCloser interface, but does not close the underlying file system.
+type nopcloser struct {
+	fsadapter.FS
+}
+
+// Close is a noop.
+func (n *nopcloser) Close() error { return nil }
+
 // NewWithPath creates a download [Manager] which initialises a file system
 // adapter over the ZIP file or Directory specified in zipOrDir.  It must be
 // closed with [Close] to ensure that all buffers are flushed to disk.
 func NewWithPath(zipOrDir string, opts ...Option) (*Manager, error) {
-	fsa, err := fsadapter.ForFilename(zipOrDir)
+	fsa, err := fsadapter.New(zipOrDir)
 	if err != nil {
 		return nil, err
 	}
-	m := New(fsa, opts...)
-	m.ownFS = true
-	m.closed.Store(false)
+	m := newMgr(fsa, opts...)
+	m.isClosed.Store(false)
 	return m, nil
 }
 
-// Close closes the underlying filesystem adapter, if it was open.  If the
+// Close closes the underlying filesystem adapter, if necessary.  If the
 // Manager wasn't initialised with [NewWithPath] then calling Close is noop.
 func (m *Manager) Close() error {
-	if !m.ownFS || m.closed.Load() {
+	if _, ok := m.fsc.(*nopcloser); ok {
 		return nil
 	}
-	m.closed.Store(true)
-	return fsadapter.Close(m.fsa)
+
+	if m.isClosed.Load() {
+		return nil
+	}
+	m.isClosed.Store(true)
+	return m.fsc.Close()
 }
 
 // request is the download request.
@@ -138,7 +149,7 @@ type request struct {
 // file system adapter fsa. It spawns numWorker goroutines for getting the
 // files. It will call fetchFn for each url.
 func (m *Manager) Download(ctx context.Context, dir string, urls []string) error {
-	if m.ownFS && m.closed.Load() {
+	if m.isClosed.Load() {
 		return errors.New("manager is closed")
 	}
 	if m.numWorkers == 0 {
@@ -227,7 +238,7 @@ func (m *Manager) worker(ctx context.Context, dir string, requestC <-chan reques
 			if !more {
 				return
 			}
-			err := m.fetchFn(ctx, m.fsa, dir, req.filename, req.url)
+			err := m.fetchFn(ctx, m.fsc, dir, req.filename, req.url)
 			resultC <- result{filename: req.filename, err: err}
 		}
 	}
@@ -286,7 +297,7 @@ func basename(uri string) (string, error) {
 
 // parseURLs parses the provided URLs and returns a slice of requests.
 func parseURLs(urls []string) ([]request, error) {
-	var reqs = make([]request, 0, len(urls))
+	reqs := make([]request, 0, len(urls))
 	for _, uri := range urls {
 		if len(uri) == 0 {
 			continue

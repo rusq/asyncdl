@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/rusq/dlog v1.3.3
-	github.com/rusq/slackdump/v2 v2.2.10
+	github.com/rusq/fsadapter v1.0.0
 	github.com/stretchr/testify v1.8.1
 )
 
