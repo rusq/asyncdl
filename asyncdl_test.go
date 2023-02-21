@@ -12,11 +12,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/rusq/slackdump/v2/fsadapter"
+	"github.com/rusq/fsadapter"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -79,7 +78,7 @@ func Test_get(t *testing.T) {
 			defer server.Close()
 
 			dir := t.TempDir()
-			fsa, err := fsadapter.ForFilename(dir)
+			fsa, err := fsadapter.New(dir)
 			if err != nil {
 				t.Fatalf("failed to create test dir: %s", err)
 			}
@@ -177,7 +176,7 @@ func Test_worker(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fsa, _ := fsadapter.ForFilename(t.TempDir())
+			fsa, _ := fsadapter.New(t.TempDir())
 			resultC := make(chan result)
 			m := New(fsa)
 			m.fetchFn = tt.fetchFn
@@ -206,14 +205,14 @@ func Test_worker(t *testing.T) {
 func Test_fetch(t *testing.T) {
 	t.Run("concurrent download of fake urls", func(t *testing.T) {
 		urls := generateURLs(50)
-		fsa, _ := fsadapter.ForFilename(t.TempDir())
-		defer fsadapter.Close(fsa)
+		fsa, _ := fsadapter.New(t.TempDir())
+		defer fsa.Close()
 
 		got := make(map[string]string, len(urls))
 		var gotMu sync.Mutex
 		m := Manager{
-			fsa: fsa,
-			fetchFn: func(ctx context.Context, fsa fsadapter.FS, dir string, filename string, uri string) error {
+			fsc: fsa,
+			fetchFn: func(_ context.Context, _ fsadapter.FS, _ string, filename string, uri string) error {
 				gotMu.Lock()
 				got[filename] = uri
 				gotMu.Unlock()
@@ -374,45 +373,6 @@ func Test_parseURLs(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("parseURLs() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestManager_Download(t *testing.T) {
-	type fields struct {
-		numWorkers    int
-		fetchFn       fetchFunc
-		ignoreHTTPerr bool
-		fsa           fsadapter.FS
-		ownFS         bool
-		closed        atomic.Bool
-	}
-	type args struct {
-		ctx  context.Context
-		dir  string
-		urls []string
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := &Manager{
-				numWorkers:    tt.fields.numWorkers,
-				fetchFn:       tt.fields.fetchFn,
-				ignoreHTTPerr: tt.fields.ignoreHTTPerr,
-				fsa:           tt.fields.fsa,
-				ownFS:         tt.fields.ownFS,
-				closed:        tt.fields.closed,
-			}
-			if err := m.Download(tt.args.ctx, tt.args.dir, tt.args.urls); (err != nil) != tt.wantErr {
-				t.Errorf("Manager.Download() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
