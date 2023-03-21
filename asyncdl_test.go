@@ -83,7 +83,7 @@ func Test_get(t *testing.T) {
 				t.Fatalf("failed to create test dir: %s", err)
 			}
 
-			if err := get(tt.args.ctx, fsa, tt.args.dir, tt.args.name, server.URL); (err != nil) != tt.wantErr {
+			if err := get(tt.args.ctx, http.DefaultClient, fsa, tt.args.dir, tt.args.name, server.URL); (err != nil) != tt.wantErr {
 				t.Errorf("fetch() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
@@ -139,7 +139,7 @@ func Test_worker(t *testing.T) {
 				dir:      "",
 				requestC: testRequestC([]request{{"test", "passed"}}, true),
 			},
-			func(ctx context.Context, fsa fsadapter.FS, dir string, name string, uri string) error {
+			func(_ context.Context, _ *http.Client, _ fsadapter.FS, _ string, _ string, _ string) error {
 				return nil
 			},
 			[]result{
@@ -153,7 +153,7 @@ func Test_worker(t *testing.T) {
 				dir:      "",
 				requestC: testRequestC([]request{}, false),
 			},
-			func(ctx context.Context, fsa fsadapter.FS, dir string, name string, uri string) error {
+			func(_ context.Context, _ *http.Client, _ fsadapter.FS, _ string, _ string, _ string) error {
 				return nil
 			},
 			[]result{
@@ -166,7 +166,7 @@ func Test_worker(t *testing.T) {
 				ctx:      context.Background(),
 				requestC: testRequestC([]request{{"test", "passed"}}, true),
 			},
-			func(ctx context.Context, fsa fsadapter.FS, dir string, name string, uri string) error {
+			func(_ context.Context, _ *http.Client, _ fsadapter.FS, _ string, _ string, _ string) error {
 				return io.EOF
 			},
 			[]result{
@@ -212,7 +212,7 @@ func Test_fetch(t *testing.T) {
 		var gotMu sync.Mutex
 		m := Manager{
 			fsc: fsa,
-			fetchFn: func(_ context.Context, _ fsadapter.FS, _ string, filename string, uri string) error {
+			fetchFn: func(_ context.Context, _ *http.Client, _ fsadapter.FS, _ string, filename string, uri string) error {
 				gotMu.Lock()
 				got[filename] = uri
 				gotMu.Unlock()
