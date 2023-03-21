@@ -5,6 +5,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/rusq/dlog v1.3.3 h1:Q9fZW1H/YEnlDg3Ph1k/BRSBfi/q5ezI+8Metws9tTI=
 github.com/rusq/dlog v1.3.3/go.mod h1:kjZAEvBu7m3+mnJQKoIeLul1YB3kJq/6lZBdDTZmpzA=
+github.com/rusq/dlog v1.4.0 h1:64oHTSzHjzG6TXKvMbPKQzvqADCZRn6XgAWnp7ASr5k=
+github.com/rusq/dlog v1.4.0/go.mod h1:kjZAEvBu7m3+mnJQKoIeLul1YB3kJq/6lZBdDTZmpzA=
 github.com/rusq/fsadapter v1.0.0 h1:6IZFkpX/MgAKFMyKPDWAnBz2RxYg8MH4EqV9Xy3m4lQ=
 github.com/rusq/fsadapter v1.0.0/go.mod h1:56enDqgnY1Mu+brFsVoA3WW4VbKdtjflR7qz/7Rab1E=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=

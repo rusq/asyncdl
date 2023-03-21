@@ -55,6 +55,8 @@ type Manager struct {
 	// error.  If false, it will ignore the error and continue.
 	ignoreHTTPerr bool
 
+	cl *http.Client
+
 	// fsc is the base file system adapter, it points to a filesystem which
 	// we are free to create files or directories in.
 	fsc fsadapter.FSCloser
@@ -83,7 +85,14 @@ func IgnoreHTTPErrors(isEnabled bool) Option {
 	}
 }
 
-type fetchFunc func(ctx context.Context, fsa fsadapter.FS, dir string, name string, uri string) error
+// WithClient allows to specify a custom HTTP client to use.
+func WithClient(cl *http.Client) Option {
+	return func(m *Manager) {
+		m.cl = cl
+	}
+}
+
+type fetchFunc func(ctx context.Context, cl *http.Client, fsa fsadapter.FS, dir string, name string, uri string) error
 
 // New creates a new download Manager.
 func New(fsa fsadapter.FS, opts ...Option) *Manager {
@@ -95,6 +104,7 @@ func newMgr(fsc fsadapter.FSCloser, opts ...Option) *Manager {
 		numWorkers:    defNumWorkers,
 		fetchFn:       get,
 		fsc:           fsc,
+		cl:            http.DefaultClient,
 		ignoreHTTPerr: true,
 	}
 	for _, opt := range opts {
@@ -206,15 +216,16 @@ func (m *Manager) Download(ctx context.Context, dir string, urls []string) error
 	for res := range resultC {
 		if res.err != nil {
 			if errors.Is(res.err, context.Canceled) {
+				// if context is cancelled, we terminate.
 				return res.err
 			}
 			if !m.ignoreHTTPerr {
 				return fmt.Errorf("failed: %q: %w", res.filename, res.err)
 			}
-			lg.Printf("failed: %q: %s", res.filename, res.err)
+			lg.Debugf("failed: %q: %s", res.filename, res.err)
 		}
 		count++
-		lg.Printf("downloaded % 5d/%d %q", count, total, res.filename)
+		lg.Debugf("downloaded % 5d/%d %q", count, total, res.filename)
 	}
 
 	return nil
@@ -238,7 +249,7 @@ func (m *Manager) worker(ctx context.Context, dir string, requestC <-chan reques
 			if !more {
 				return
 			}
-			err := m.fetchFn(ctx, m.fsc, dir, req.filename, req.url)
+			err := m.fetchFn(ctx, m.cl, m.fsc, dir, req.filename, req.url)
 			resultC <- result{filename: req.filename, err: err}
 		}
 	}
@@ -246,13 +257,13 @@ func (m *Manager) worker(ctx context.Context, dir string, requestC <-chan reques
 
 // get downloads one file from the uri into the dir/filename within the
 // filesystem wrapped with the fsa.
-func get(ctx context.Context, fsa fsadapter.FS, dir string, filename, uri string) error {
+func get(ctx context.Context, cl *http.Client, fsa fsadapter.FS, dir string, filename, uri string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 	if err != nil {
 		return err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return err
 	}

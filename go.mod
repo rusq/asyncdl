@@ -3,7 +3,7 @@ module github.com/rusq/asyncdl
 go 1.19
 
 require (
-	github.com/rusq/dlog v1.3.3
+	github.com/rusq/dlog v1.4.0
 	github.com/rusq/fsadapter v1.0.0
 	github.com/stretchr/testify v1.8.1
 )
